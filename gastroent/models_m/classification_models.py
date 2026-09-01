@@ -24,7 +24,7 @@ class ClassificationModel(nn.Module):
             Defaults to False.
 
     Raises:
-        ValueError: If `in_channels` is not 1 or 3, or if `num_classes` is less than 2.
+        ValueError: If 'in_channels' is not 1 or 3, or if 'num_classes' is less than 2.
     """
 
     def __init__(self, in_channels: int, num_classes: int, m_type: str, pretrained: bool = False):
