@@ -20,7 +20,7 @@ class SegmentationModel(nn.Module):
         weights_ver (str, optional): Selection of predefined weights. Defaults to 'imagenet'.
 
     Raises:
-        ValueError: If 'in_channels' is not 1 or 3, if the encoder is not recognized, 
+        ValueError: If `in_channels` is not 1 or 3, if the encoder is not recognized, 
             or if the requested pretrained weights are not available for the encoder.
 
     More about encoders: https://smp.readthedocs.io/en/latest/encoders.html
@@ -108,7 +108,7 @@ class UNetPlusPlusModel(SegmentationModel):
         weights_ver (str, optional): Selection of predefined weights. Defaults to 'imagenet'.
     
     Raises:
-        ValueError: If 'in_channels' is not 1 or 3, if the encoder is not recognized, 
+        ValueError: If `in_channels` is not 1 or 3, if the encoder is not recognized, 
             or if the requested pretrained weights are not available for the encoder.
     """
     
@@ -131,7 +131,7 @@ class DeepLabV3PlusModel(SegmentationModel):
         weights_ver (str, optional): Selection of predefined weights. Defaults to 'imagenet'.
     
     Raises:
-        ValueError: If 'in_channels' is not 1 or 3, if the encoder is not recognized, 
+        ValueError: If `in_channels` is not 1 or 3, if the encoder is not recognized, 
             or if the requested pretrained weights are not available for the encoder.
     """
     
@@ -157,7 +157,7 @@ class SegFormerModel(SegmentationModel):
             Defaults to 'imagenet'. Passed to base class.
     
     Raises:
-        ValueError: If 'in_channels' is not 1 or 3, if the encoder is not recognized, 
+        ValueError: If `in_channels` is not 1 or 3, if the encoder is not recognized, 
             or if the requested pretrained weights are not available for the encoder.
     """
     

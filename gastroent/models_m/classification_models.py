@@ -24,7 +24,7 @@ class ClassificationModel(nn.Module):
             Defaults to False.
 
     Raises:
-        ValueError: If 'in_channels' is not 1 or 3, or if 'num_classes' is less than 2.
+        ValueError: If `in_channels` is not 1 or 3, or if `num_classes` is less than 2.
     """
 
     def __init__(self, in_channels: int, num_classes: int, m_type: str, pretrained: bool = False):
@@ -96,10 +96,10 @@ class ResNetModel(ClassificationModel):
             If 2 is requested but unavailable, falls back to 1. Defaults to 1.
 
     Raises:
-        ValueError: If 'm_type' is not from the predefined pool, or if 'weights_ver' is not 1 or 2.
+        ValueError: If `m_type` is not from the predefined pool, or if `weights_ver` is not 1 or 2.
     """
 
-    def __init__(self, weights_ver: int = 1, *args, **kwargs):
+    def __init__(self, *args, weights_ver: int = 1, **kwargs):
         super(ResNetModel, self).__init__(*args, **kwargs)
         
         resnet_type_table = {'18': (resnet18, ResNet18_Weights),
@@ -181,7 +181,7 @@ class ConvNeXtModel(ClassificationModel):
             Passed to base.
 
     Raises:
-        ValueError: If 'm_type' is not from the predefined pool.
+        ValueError: If `m_type` is not from the predefined pool.
     """
     
     def __init__(self, *args, **kwargs):
@@ -258,7 +258,7 @@ class SwinTransformerModel(ClassificationModel):
             Passed to base.
 
     Raises:
-        ValueError: If 'm_type' is not from the predefined pool.
+        ValueError: If `m_type` is not from the predefined pool.
     """
     
     def __init__(self, *args, **kwargs):
