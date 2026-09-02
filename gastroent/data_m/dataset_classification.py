@@ -43,8 +43,7 @@ class DatasetClassification(DatasetBase):
 
         sample = self.data[index]
         image = Image.open(sample['image']).convert('RGB' if self.rgb else 'L')
-        image = self.transforms(image) 
-
+        
         if self.transforms is not None:
             image = self.transforms(image)
 
