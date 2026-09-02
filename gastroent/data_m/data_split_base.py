@@ -89,7 +89,7 @@ class DataSplitBase:
                     self.groups.append(group_files)
                     grouped_files.update(group_files)
 
-        # Single and not mentioned in rules files.
+        # Single and not mentioned in rules files
         for path in files:
             if path not in grouped_files:
                 self.groups.append([path])
@@ -123,7 +123,7 @@ class DataSplitBase:
         if len(samples) < self.n_folds:
             raise ValueError(f'Cannot create {self.n_folds} folds from {len(samples)} samples.')
 
-        # Samples are already in the form of groups, they are treated as inseparable entities.
+        # Samples are already in the form of groups, they are treated as inseparable entities
         groups = list(range(len(samples)))
 
         if labels is not None:
@@ -165,13 +165,13 @@ class DataSplitBase:
             train_groups = sum(any(_get_id(image) in train_files for image in group) for group in self.groups)
             val_groups = sum(any(_get_id(image) in val_files for image in group) for group in self.groups)
 
-            # No overlap between train and validation.
+            # No overlap between train and validation
             assert not train_files & val_files, f'Fold {i}: train/val overlap!'
 
-            # No files missing.
+            # No files missing
             assert train_files | val_files == all_files, f'Fold {i}: files missing!'
 
-            # Groups must remain intact.
+            # Groups must remain intact
             for group in self.groups:
                 group_files = {_get_id(path) for path in group}
 
@@ -180,7 +180,7 @@ class DataSplitBase:
 
                 assert not (in_train and in_val), f'Fold {i}: group was split! {group_files}'
 
-            # Every file must appear in validation exactly once.
+            # Every file must appear in validation exactly once
             assert not validation_seen & val_files, f'Fold {i}: files already appeared in validation!'
 
             validation_seen.update(val_files)

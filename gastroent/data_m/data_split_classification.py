@@ -110,7 +110,7 @@ class DataSplitClassification(DataSplitBase):
         labels = [sample['label'] for sample in samples]
         folds = self._split(samples, labels)
 
-        # Flatten groups after splitting.
+        # Flatten groups after splitting
         for fold in folds:
             fold['train'] = [{'image': image,
                               'label': group['label']}

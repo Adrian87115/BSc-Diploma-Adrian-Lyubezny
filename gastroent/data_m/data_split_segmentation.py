@@ -80,7 +80,7 @@ class DataSplitSegmentation(DataSplitBase):
         self.groups = image_groups
         folds = self._split(self.samples)
 
-        # Flatten groups into individual images.
+        # Flatten groups into individual images
         for fold in folds:
             fold['train'] = [item for group in fold['train'] for item in group['files']]
             fold['val'] = [item for group in fold['val'] for item in group['files']]

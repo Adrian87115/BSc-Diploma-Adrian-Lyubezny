@@ -187,7 +187,7 @@ def get_class_color_histograms(paths: list[Path]) -> dict[str, dict[str, Any]]:
             continue
 
         # Hue
-        hue_mask = s > 0.05 # Arbitrary threshold - for very low saturation, hue becomes meaningless.
+        hue_mask = s > 0.05 # Arbitrary threshold - for very low saturation, hue becomes meaningless
 
         if np.any(hue_mask):
             h_hist, _ = np.histogram(h[hue_mask], bins = h_edges)
