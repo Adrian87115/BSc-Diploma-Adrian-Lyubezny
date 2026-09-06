@@ -148,7 +148,7 @@ class Logger:
         Args:
             epoch (int): Current epoch.
             train_loss (float): Training loss at the given epoch.
-            val_loss (float | None, optional): Evaluation loss at the given epoch.
+            val_loss (float | None, optional): Validation loss at the given epoch.
                 Defaults to None.
         """
 
