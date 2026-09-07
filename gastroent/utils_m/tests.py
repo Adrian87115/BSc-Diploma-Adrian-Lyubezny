@@ -27,7 +27,7 @@ def test_classification(model: ClassificationModel, experiment: str, run_index: 
 
     model = model.model
 
-    base_dir = Path(__file__).resolve().parents[1]
+    base_dir = Path(__file__).resolve().parents[2]
     file_path = base_dir / 'models' / experiment / f'run_{run_index:03d}' / 'checkpoints' / f'epoch_{epoch:03d}.pt'
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -113,7 +113,7 @@ def test_segmentation(model: SegmentationModel, experiment: str, run_index: int,
 
     model = model.model
 
-    base_dir = Path(__file__).resolve().parents[1]
+    base_dir = Path(__file__).resolve().parents[2]
     file_path = base_dir / 'models' / experiment / f'run_{run_index:03d}' / 'checkpoints' / f'epoch_{epoch:03d}.pt'
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
