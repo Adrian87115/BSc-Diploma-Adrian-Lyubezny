@@ -3,8 +3,6 @@ from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 
-from utils import ALLOWED_EXTENSIONS
-
 def get_paths(folder_path: str) -> list[Path]:
     """
     Obtains all images of the allowed format in the given folder.
@@ -16,6 +14,8 @@ def get_paths(folder_path: str) -> list[Path]:
     Returns:
         list[Path]: All found image file paths.
     """
+
+    from utils_m.utils import ALLOWED_EXTENSIONS
 
     paths = []
     search_path = Path(folder_path)

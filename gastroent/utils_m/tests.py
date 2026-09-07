@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from PIL import Image
 from typing import Any
-import numpy as np
 
 from models_m.classification_models import *
 from models_m.segmentation_models import *

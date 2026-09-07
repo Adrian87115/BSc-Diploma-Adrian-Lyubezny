@@ -4,8 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Any
 
-from utils import ALLOWED_EXTENSIONS
-
 def get_classes_paths(folder_path: str) -> dict[str, list[Path]]:
     """
     Traverses a directory to group image paths by their parent folder name.
@@ -36,6 +34,8 @@ def get_classes_paths(folder_path: str) -> dict[str, list[Path]]:
         Args:
             current_path (Path): Entry path of traversing.
         """
+
+        from utils_m.utils import ALLOWED_EXTENSIONS
 
         for item in sorted(current_path.iterdir()):
             if item.is_dir():

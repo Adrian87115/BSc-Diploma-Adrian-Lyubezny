@@ -1,4 +1,5 @@
 import torch
+import torch.distributed as dist
 import time
 from torchmetrics.classification import ConfusionMatrix, AUROC, Precision, Recall, F1Score
 import matplotlib.pyplot as plt
@@ -79,11 +80,11 @@ class TrainClassification(TrainBase):
                     roc_auc.update(outputs, labels)
             
         if self.world_size > 1:
-            torch.distributed.all_reduce(total_loss, op = torch.distributed.ReduceOp.SUM)
-            torch.distributed.all_reduce(total_correct, op = torch.distributed.ReduceOp.SUM)
-            torch.distributed.all_reduce(total_samples, op = torch.distributed.ReduceOp.SUM)
-            torch.distributed.all_reduce(total2_correct, op=torch.distributed.ReduceOp.SUM)
-            torch.distributed.all_reduce(total3_correct, op=torch.distributed.ReduceOp.SUM)
+            dist.all_reduce(total_loss, op = dist.ReduceOp.SUM)
+            dist.all_reduce(total_correct, op = dist.ReduceOp.SUM)
+            dist.all_reduce(total_samples, op = dist.ReduceOp.SUM)
+            dist.all_reduce(total2_correct, op = dist.ReduceOp.SUM)
+            dist.all_reduce(total3_correct, op = dist.ReduceOp.SUM)
 
         avg_loss = (total_loss / total_samples).item()
         accuracy1 = (total_correct / total_samples).item()

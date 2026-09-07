@@ -1,4 +1,5 @@
 import torch
+import torch.distributed as dist
 import time
 
 from train_m.train_base import TrainBase
@@ -60,10 +61,10 @@ class TrainSegmentation(TrainBase):
                 total_iou += iou.sum()
 
         if self.world_size > 1:
-            torch.distributed.all_reduce(total_loss, op = torch.distributed.ReduceOp.SUM)
-            torch.distributed.all_reduce(total_dice, op = torch.distributed.ReduceOp.SUM)
-            torch.distributed.all_reduce(total_samples, op = torch.distributed.ReduceOp.SUM)
-            torch.distributed.all_reduce(total_iou, op = torch.distributed.ReduceOp.SUM)
+            dist.all_reduce(total_loss, op = dist.ReduceOp.SUM)
+            dist.all_reduce(total_dice, op = dist.ReduceOp.SUM)
+            dist.all_reduce(total_samples, op = dist.ReduceOp.SUM)
+            dist.all_reduce(total_iou, op = dist.ReduceOp.SUM)
 
         avg_loss = (total_loss / total_samples).item()
         avg_dice = (total_dice / total_samples).item()

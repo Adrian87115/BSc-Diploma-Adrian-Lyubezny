@@ -3,8 +3,6 @@ from pathlib import Path
 from sklearn.model_selection import GroupKFold, StratifiedGroupKFold
 from typing import Any
 
-from utils import ALLOWED_EXTENSIONS
-
 class DataSplitBase:
     """
     A base class for obtaining and splitting image file paths.
@@ -52,6 +50,9 @@ class DataSplitBase:
         Returns:
             list[Path]: A list of paths to all valid image files.
         """
+
+        from utils_m.utils import ALLOWED_EXTENSIONS
+        
         search_path = Path(search_dir)
         return [path for path in search_path.rglob('*') if path.is_file() and path.suffix.lower() in ALLOWED_EXTENSIONS]
 
