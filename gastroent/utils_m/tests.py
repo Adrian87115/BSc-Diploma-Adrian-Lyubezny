@@ -5,8 +5,8 @@ from pathlib import Path
 from PIL import Image
 from typing import Any
 
-from models_m.classification_models import *
-from models_m.segmentation_models import *
+from models_m.classification_models import ClassificationModel
+from models_m.segmentation_models import SegmentationModel
 from data_m.dataset_classification import CLASS_TO_IDX
 
 def test_classification(model: ClassificationModel, experiment: str, run_index: int, epoch: int, images: str | list[str], prep: dict[str, Any], rgb: bool = True, labels: str | list[str] = None) -> None:
