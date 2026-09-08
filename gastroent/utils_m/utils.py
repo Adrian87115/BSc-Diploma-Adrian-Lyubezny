@@ -141,7 +141,7 @@ def validate_setup(setup: dict[str, Any], required_keys: list[str]) -> dict[str,
 
     if isinstance(setup['model'], str):
         if setup['model'] not in available_models:
-            raise ValueError(f'Model {setup['model']} not found. Available models: {list(available_models.keys())}.')
+            raise ValueError(f"Model {setup['model']} not found. Available models: {list(available_models.keys())}.")
 
         setup['model'] = available_models[setup['model']]
 
@@ -149,7 +149,7 @@ def validate_setup(setup: dict[str, Any], required_keys: list[str]) -> dict[str,
         loss_name = setup['loss_function'].split('.')[-1]
 
         if not hasattr(torch.nn, loss_name):
-            raise ValueError(f'Loss function {setup['loss_function']} not found in torch.nn.')
+            raise ValueError(f"Loss function {setup['loss_function']} not found in torch.nn.")
 
         setup['loss_function'] = getattr(torch.nn, loss_name)
 
