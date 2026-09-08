@@ -9,7 +9,13 @@ from models_m.classification_models import ClassificationModel
 from models_m.segmentation_models import SegmentationModel
 from data_m.dataset_classification import CLASS_TO_IDX
 
-def test_classification(model: ClassificationModel, experiment: str, run_index: int, epoch: int, images: str | list[str], prep: dict[str, Any], rgb: bool = True, labels: str | list[str] = None) -> None:
+RGB_PREPROCESSING = {'resize_size': 256,
+                     'interpolation_type': v2.InterpolationMode.BILINEAR,
+                     'center_crop': 224,
+                     'mean': [0.485, 0.456, 0.406],
+                     'std': [0.229, 0.224, 0.225]}
+
+def test_classification(model: ClassificationModel, experiment: str, run_index: int, epoch: int, images: str | list[str], prep: dict[str, Any] = None, rgb: bool = True, labels: str | list[str] = None) -> None:
     """
     Testing the model on individual or group of images.
 
@@ -19,10 +25,14 @@ def test_classification(model: ClassificationModel, experiment: str, run_index: 
         run_index (int): Number of the run, used in accessing the saved model.
         epoch (int): Number of the epoch, used in accessing the saved model.
         images (str | list[str]): Paths to images.
-        prep (dict[str, Any]): Dicitonary with parameters for preprocessing the images.
+        prep (dict[str, Any] | None, optional): Dicitonary with parameters for preprocessing the images.
+            Defaults to None. When not using RGB_PREPROCESSING, another must be provided.
         rgb (bool, optional): RGB or grayscale mode. Defaults to True.
         labels (str | list[str] | None, optional): List of labels for the images. Used to
             compare model results with groundtruth. Defaults to None.
+
+    Raises:
+        ValueError: If RGB_PREPROCESSING is not used, another dictionary must be provided.
     """
 
     model = model.model
@@ -42,6 +52,11 @@ def test_classification(model: ClassificationModel, experiment: str, run_index: 
     model.load_state_dict(checkpoint['model_state_dict'])
     model.to(device)
     model.eval()
+
+    if prep is None and rgb is True:
+        prep = RGB_PREPROCESSING
+    else:
+        raise ValueError('Preprocessing dictionary is required.')
 
     transform_pipeline = v2.Compose([v2.ToImage(),
                                      v2.Resize(size = prep['resize_size'], interpolation = prep.get('interpolation_type', v2.InterpolationMode.BILINEAR)),
@@ -107,7 +122,8 @@ def test_segmentation(model: SegmentationModel, experiment: str, run_index: int,
         epoch (int): Number of the epoch, used in accessing the saved model.
         data_folder (str): Folder with subfolders 'images' and optionally 'masks'.
         images (str | list[str]): Paths to images. Masks should have exactly the same.
-        prep (dict[str, Any]): Dicitonary with parameters for preprocessing the images.
+        prep (dict[str, Any] | None, optional): Dicitonary with parameters for preprocessing the images.
+            Defaults to None. When not using RGB_PREPROCESSING, another must be provided.
         rgb (bool, optional): RGB or grayscale mode. Defaults to True.
     """
 
@@ -128,6 +144,11 @@ def test_segmentation(model: SegmentationModel, experiment: str, run_index: int,
     model.load_state_dict(checkpoint['model_state_dict'])
     model.to(device)
     model.eval()
+
+    if prep is None and rgb is True:
+            prep = RGB_PREPROCESSING
+    else:
+        raise ValueError('Preprocessing dictionary is required.')
 
     transform_pipeline = v2.Compose([v2.ToImage(),
                                      v2.Resize(size = prep['resize_size'], interpolation = prep.get('interpolation_type', v2.InterpolationMode.BILINEAR)),
