@@ -5,11 +5,10 @@ from data_m.dataset_base import DatasetBase
 
 class DatasetClassification(DatasetBase):
     """
-    PyTorch Dataset for image classification.
+    Dataset for image classification.
 
     Inherits from DatasetBase. Responsible for loading images from disk, 
-    applying the required transforms, and mapping string class names to 
-    integer tensor labels for training.
+    and mapping string class names to integer tensor labels for training.
     """
 
     def __init__(self, *args, **kwargs):
@@ -43,10 +42,7 @@ class DatasetClassification(DatasetBase):
 
         sample = self.data[index]
         image = Image.open(sample['image']).convert('RGB' if self.rgb else 'L')
-        
-        if self.transforms is not None:
-            image = self.transforms(image)
-
+        image = self.to_image(image)
         label = torch.tensor(CLASS_TO_IDX[sample['label']], dtype = torch.long)
         return image, label
 
