@@ -2,17 +2,50 @@ import torch
 from torch.utils.data import DataLoader, DistributedSampler
 import time
 from torch.nn.parallel import DistributedDataParallel as DDP
+from typing import Any
 
 from utils_m.utils import set_seeds, setup, cleanup
+from data_m.transforms import get_transforms
+from utils_m.logger import Logger
+from models_m.classification_models import ClassificationModel
+from models_m.segmentation_models import SegmentationModel
+from data_m.dataset_base import DatasetBase
 
 class TrainBase():
-    def __init__(self, logger, model, batch_size, loss_function, train_dataset, eval_dataset, optimizer, scheduler, num_workers, persistent_workers, prefetch_factor, pin_memory, seed = 42, mode = 'gloo', rank = 0, world_size = 1):
+    """
+    Base for classification and segmentation, with common training loop.
+
+    Args:
+        logger (Logger): Object used to handle: logging, saving, and loading.
+        model (ClassificationModel | SegmentationModel): Wrapper object with ready to use self.model.
+        batch_size (int): Size of the batch used in the training and evaluation. 
+        loss_function (torch.nn): Loss function.
+        train_dataset (DatasetBase): Training data. 
+        eval_dataset (DatasetBase): Evaluation data.
+        optimizer (torch.optim.Optimizer): Optimization algorithm.
+        scheduler (torch.optim.lr_scheduler): Scheduling algorithm.
+        num_workers (int): Number of CPU workers for data loading.
+        persistent_workers (bool): If True, keeps the data loader worker processes alive between epochs.
+        prefetch_factor (int): Number of batches loaded in advance by each worker to prevent GPU starvation.
+        pin_memory (bool): If True, allocates data in page-locked memory, which speeds up the data transfer from CPU to GPU.
+        seed (int): Seed used to reproduce the results.
+        backend_mode (str): Backend for distributed training ('gloo' for Windows, 'nccl' for Linux).
+        rank (int, optional): The index of the current process in the distributed training setup (0 is the main/master process).
+            Defaults to 0.
+        world_size (int, optional): The total number of processes/GPUs participating in the distributed training. Defaults to 1.
+    """
+
+    def __init__(self, logger: Logger, model: ClassificationModel | SegmentationModel, 
+                 batch_size: int, loss_function: torch.nn, train_dataset: DatasetBase, 
+                 eval_dataset: DatasetBase, optimizer: torch.optim.Optimizer, 
+                 scheduler: torch.optim.lr_scheduler, num_workers: int, 
+                 persistent_workers: bool, prefetch_factor: int, pin_memory: bool, 
+                 seed: int = 42, backend_mode: str = 'gloo', rank: int = 0, world_size: int = 1):
         self.rank = rank
         self.world_size = world_size
-        self.mode = mode
 
         if self.world_size > 1: 
-            setup(self.world_size, self.rank, self.mode)
+            setup(self.world_size, self.rank, backend_mode)
 
         self.device = torch.device(f'cuda:{self.rank}')
         print(f'Training on device: {self.rank}')
@@ -140,19 +173,27 @@ class TrainBase():
 
         print(f'Model successfully loaded from: {file_path}. Resuming epoch: {self.resumed_epoch}.')
 
-    def train(self, num_epochs: int, save_freq: int = 5, eval_freq: int = 1, print_batch: bool = True) -> None:
+    def train(self, num_epochs: int, prep: dict[str, Any], aug: dict[str, Any] | None = None, save_freq: int = 5, eval_freq: int = 1, print_batch: bool = True, gpu_transforms: bool = True) -> None:
         """
-        Training function.
+        Train, validate, and save the model.
 
         Args:
-            num_epochs (int): Duration of training in epochs.
-            save_freq (int): Frequency of saving the state of the model.
-            eval_freq (int): Frequency of evaluation.
-            print_batch (bool, optional): Enables printing statistics of each batch.
+            num_epochs (int): Number of training epochs.
+            prep (dict[str, Any]): Dicitonary with parameters for preprocessing the images.
+            aug (dict[str, Any] | None, optional): Dicitonary with parameters for augmentation of the images.
+            save_freq (int, optional): Frequency of saving the state of the model. Defaults to 5.
+            eval_freq (int, optional): Frequency of evaluation. Defaults to 1.
+            print_batch (bool, optional): Enables printing statistics of each batch. Defaults to True.
+            gpu_transforms (bool, optional): Preprocessing and augmentations on GPU. Defaults to True.
         
         Raises:
             RuntimeError: If training was resumed in the selected run, but model was not loaded.
         """
+
+        from train_m.train_classification import TrainClassification
+        classification = isinstance(self, TrainClassification)
+        
+        transforms = get_transforms(prep = prep, aug = aug, use_gpu = gpu_transforms, classification = classification)
 
         if self.logger.is_resuming and not self.logger.is_loaded:
             raise RuntimeError(f'trainer.load_model() must be called before trainer.train() while resuming.')
@@ -176,11 +217,48 @@ class TrainBase():
             for i, (inputs, labels) in enumerate(self.train_dataloader):
                 t_start_batch = time.time()
 
-                inputs = inputs.to(self.device, non_blocking = True)
-                labels = labels.to(self.device, non_blocking = True)
+                if gpu_transforms:
+                    inputs = inputs.to(self.device, non_blocking = True)
+                    labels = labels.to(self.device, non_blocking = True)
+
+                    if classification:
+                        inputs = transforms(inputs)
+                    else:
+                        inputs, labels = transforms(inputs, labels)
+
+                        if labels.ndim == 4 and labels.shape[1] == 1:
+                            labels = labels.squeeze(1)
+                else:
+                    inputs_np = inputs.numpy()
+                    transformed_inputs = []
+
+                    if classification:
+                        for image in inputs_np:
+                            image = image.transpose(1, 2, 0)
+                            transformed = transforms(image = image,)
+                            transformed_inputs.append(transformed['image'])
+                    else:
+                        labels_np = labels.numpy()
+                        transformed_labels = []
+
+                        for image, mask in zip(inputs_np, labels_np):
+                            image = image.transpose(1, 2, 0)
+
+                            if mask.ndim == 3 and mask.shape[0] == 1:
+                                mask = mask.squeeze(0)
+
+                            transformed = transforms(image = image, mask = mask)
+                            transformed_inputs.append(transformed['image'])
+                            transformed_labels.append(transformed['mask'])
+
+                    inputs = torch.stack(transformed_inputs).to(self.device, non_blocking = True)
+                    labels = torch.stack(transformed_labels).to(self.device, non_blocking = True) if not classification else labels.to(self.device, non_blocking = True)
+
+                    if not classification and labels.ndim == 4 and labels.shape[1] == 1:
+                        labels = labels.squeeze(1)
 
                 self.optimizer.zero_grad(set_to_none = True)
-
+            
                 outputs = self.ddp(inputs)
                 loss = self.loss_function(outputs, labels)
 
@@ -211,7 +289,7 @@ class TrainBase():
             eval_loss = None
 
             if epoch % eval_freq == 0:
-                eval_loss, eval_stat = self.evaluate(epoch)
+                eval_loss, eval_stat = self.evaluate(epoch = epoch, prep = prep, gpu_transforms = gpu_transforms)
 
                 if self.rank == 0:
                     self.logger.update_log(eval_stat)
