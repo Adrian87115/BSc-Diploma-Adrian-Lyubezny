@@ -1,5 +1,5 @@
 from PIL import Image
-from torchvision import tv_tensors
+import numpy as np
 import torch
 
 from data_m.dataset_base import DatasetBase
@@ -18,14 +18,22 @@ class DatasetSegmentation(DatasetBase):
         Returns:
             tuple[torch.Tensor, torch.Tensor]: A tuple containing:
                 - The transformed image tensor (C, H, W).
-                - The binary mask tensor (H, W) where background is 0 and 
-                  target is 1.
+                - The binary mask tensor (1, H, W) where background is 0 and target is 1.
         """
 
         sample = self.data[index]
         image = Image.open(sample['image']).convert('RGB' if self.rgb else 'L')
+        mask = Image.open(sample['mask']).convert('L')
+        
         image = self.to_image(image)
-        mask = Image.open(sample['mask']).convert('L') 
-        mask = tv_tensors.Mask(mask)    # Wraps the mask so torchvision.transforms.v2 knows how to handle it
-        mask = mask > 0 # black -> 0, white -> 1
+        mask = self.to_image(mask)
+
+        image = self.resize(image)
+        image = self.crop(image)
+
+        mask = self.mask_resize(mask)
+        mask = self.crop(mask)
+
+        image = image.float() / 255.0
+        mask = (mask > 0).float().long()    # black -> 0, white -> 1
         return image, mask

@@ -36,13 +36,16 @@ class DatasetClassification(DatasetBase):
 
         Returns:
             tuple[torch.Tensor, torch.Tensor]: A tuple containing:
-                - The transformed image tensor (C, H, W).
+                - The transformed image tensor (C, H, W), values in [0, 1].
                 - The class label as a 0-dimensional torch.long tensor.
         """
 
         sample = self.data[index]
         image = Image.open(sample['image']).convert('RGB' if self.rgb else 'L')
         image = self.to_image(image)
+        image = self.resize(image)
+        image = self.crop(image)
+        image = image.float() / 255.0
         label = torch.tensor(CLASS_TO_IDX[sample['label']], dtype = torch.long)
         return image, label
 
@@ -55,6 +58,7 @@ CLASS_TO_IDX = {# Kvasir #
                 'normal-z-line': 5,
                 'polyps': 6,
                 'ulcerative-colitis': 7,    # Is conflicting with more detailed 'ulcerative-colitis' classes present in HyperKvasir
+                
                 # HyperKvasir #
                 'cecum': 3,
                 'ileum' : 8,
