@@ -21,7 +21,7 @@ def build_experiment(seed, experiment_name, run_index = None, epoch_load = None,
 
     model = build_model(setup = setup, classification = classification)
 
-    train_dataset, val_dataset = build_datasets(setup = setup, prep = prep, aug = aug, seed = seed, classification = classification)
+    train_dataset, val_dataset = build_datasets(setup = setup, prep = prep, seed = seed, classification = classification)
 
     loss_function = build_loss_function(setup = setup)
 
@@ -43,12 +43,12 @@ def build_experiment(seed, experiment_name, run_index = None, epoch_load = None,
         trainer.load_model(epoch_load)
 
     if train:
-        trainer.train(num_epochs = setup['num_epochs'], save_freq = setup['save_freq'], eval_freq = setup['eval_freq'])
+        trainer.train(num_epochs = setup['num_epochs'], prep = prep, aug = aug, save_freq = setup['save_freq'], eval_freq = setup['eval_freq'], gpu_transforms = setup['gpu_transforms'])
     else:
         if classification:
-            trainer.evaluate(detailed = True, unique_labels = val_dataset.get_unique_labels())
+            trainer.evaluate(prep = prep, detailed = True, unique_labels = val_dataset.get_unique_labels(), gpu_transforms = setup['gpu_transforms'])
         else:
-            trainer.evaluate()
+            trainer.evaluate(prep = prep, gpu_transforms = setup['gpu_transforms'])
 
 def classification_experiment(seed, experiment_name, run_index = None, epoch_load = None, train = True, plot_losses = False):
     print(f'Running classification experiment: {experiment_name}.')
