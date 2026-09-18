@@ -12,3 +12,5 @@ segmentation-models-pytorch
 scikit-learn
 torchmetrics
 seaborn
+albumentations
+kornia
