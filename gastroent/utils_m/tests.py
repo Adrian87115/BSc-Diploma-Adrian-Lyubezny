@@ -111,7 +111,7 @@ def test_classification(model: ClassificationModel, experiment: str, run_index: 
                 
             print('-' * 30)
 
-def test_segmentation(model: SegmentationModel, experiment: str, run_index: int, epoch: int, data_folder: str, images: str | list[str], prep: dict[str, Any], rgb: bool = True) -> None:
+def test_segmentation(model: SegmentationModel, experiment: str, run_index: int, epoch: int, data_folder: str, images: str | list[str], prep: dict[str, Any] = None, rgb: bool = True) -> None:
     """
     Testing the model on individual or group of images.
 
@@ -121,7 +121,7 @@ def test_segmentation(model: SegmentationModel, experiment: str, run_index: int,
         run_index (int): Number of the run, used in accessing the saved model.
         epoch (int): Number of the epoch, used in accessing the saved model.
         data_folder (str): Folder with subfolders 'images' and optionally 'masks'.
-        images (str | list[str]): Paths to images. Masks should have exactly the same.
+        images (str | list[str]): Paths to images. Masks should have exactly the same file names as the images.
         prep (dict[str, Any] | None, optional): Dicitonary with parameters for preprocessing the images.
             Defaults to None. When not using RGB_PREPROCESSING, another must be provided.
         rgb (bool, optional): RGB or grayscale mode. Defaults to True.
@@ -146,7 +146,7 @@ def test_segmentation(model: SegmentationModel, experiment: str, run_index: int,
     model.eval()
 
     if prep is None and rgb is True:
-            prep = RGB_PREPROCESSING
+        prep = RGB_PREPROCESSING
     else:
         raise ValueError('Preprocessing dictionary is required.')
 
