@@ -99,7 +99,7 @@ def get_transforms(prep: dict[str, Any], aug: dict[str, Any] | None = None, use_
                     ToTensorV2()])
         return A.Compose(ops, additional_targets = {'mask': 'mask'} if not classification else None)
 
-    # GPU - Kornia #
+    # GPU - Kornia
     if aug:
         if hsv:
             ops.append(K.ColorJitter(hue = hsv.get('hue', 0),
