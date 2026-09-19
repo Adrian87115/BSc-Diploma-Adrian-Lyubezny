@@ -6,7 +6,6 @@ import os
 import json
 from pathlib import Path
 from typing import Any
-from torchvision.transforms import v2
 from typing import Iterator
 
 from models_m.classification_models import ClassificationModel, ResNetModel, ConvNeXtModel, SwinTransformerModel
@@ -39,7 +38,8 @@ REQUIRED_SETUP_SEGMENTATION = ['in_channels', 'encoder', 'pretrained',
 REQUIRED_PREP = ['resize_size', 'interpolation_type', 'center_crop', 'mean', 'std']
 
 # Keys that can be used for augmentation
-POSSIBLE_AUG = []
+POSSIBLE_AUG = ['hsv', 'rotation', 'translation', 'scale', 'interpolation_type', 'horizontal_flip',
+                'vertical_flip', 'fill', 'random_crop', 'probs']
 
 def set_seeds(seed: int) -> None:
     """
@@ -67,8 +67,14 @@ def setup(world_size: int, rank: int, backend: str = 'gloo') -> None:
         rank (int): ID of the current GPU.
         backend (str): Mode of the environment. The distributed backend. 'gloo' is standard for 
             Windows or CPU training, 'nccl' is standard for Linux multi-GPU. Defaults to 'gloo'.
+    
+    Raises:
+        ValueError: If backend is incorrect.
     """
 
+    if backend not in ['gloo', 'nccl']:
+        raise ValueError(f'Incorrect backend: {backend}. Allowed: gloo, nccl.')
+    
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12345'
     dist.init_process_group(backend, rank = rank, world_size = world_size)
@@ -82,6 +88,25 @@ def cleanup() -> None:
      """
      
      dist.destroy_process_group()
+
+def to_hw(size: int | tuple[int, int] | list[int]) -> tuple[int, int]:
+        """
+        Expands 1 dimensional size to 2 dimensional height x width, if needed.
+
+        Args:
+            size (int | tuple[int, int] | list[int]): 1 or 2 dimensional size.
+
+        Returns:
+            tuple[int, int]: New size.
+        """
+
+        if isinstance(size, int):
+            return size, size
+
+        if len(size) != 2:
+            raise ValueError(f'Expected an integer or a 2-element size, got {size}.')
+
+        return int(size[0]), int(size[1])
 
 def get_config(config_path: str | Path, classification: bool) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """
@@ -201,8 +226,7 @@ def validate_setup(setup: dict[str, Any], required_keys: list[str]) -> dict[str,
 
 def validate_prep(prep: dict[str, Any], required_keys: list[str]) -> dict[str, Any]:
     """
-    Checks for the missing content of the preprocessing configuration. 
-    Casts into objects.
+    Checks for missing content of the preprocessing configuration. 
 
     Args:
         prep (dict[str, Any]): Dictionary containing the preprocessing configuration variables.
@@ -221,17 +245,10 @@ def validate_prep(prep: dict[str, Any], required_keys: list[str]) -> dict[str, A
     if missing_keys:
         raise ValueError(f'Missing obligatory preprocessing variables: {missing_keys}')
 
-    interpolation_map = {'NEAREST': v2.InterpolationMode.NEAREST,
-                         'NEAREST_EXACT': v2.InterpolationMode.NEAREST_EXACT,
-                         'BILINEAR': v2.InterpolationMode.BILINEAR,
-                         'BICUBIC': v2.InterpolationMode.BICUBIC}
     interpolation = prep['interpolation_type']
 
-    if isinstance(interpolation, str):
-        try:
-            prep['interpolation_type'] = interpolation_map[interpolation.upper()]
-        except KeyError:
-            raise ValueError(f'Unknown interpolation type: {interpolation}. Available: {list(interpolation_map)}.')
+    if interpolation not in ['bilinear', 'bicubic', 'nearest']:
+        raise ValueError(f'Unknown interpolation type: {interpolation}.')         
 
     if len(prep['mean']) != len(prep['std']):
         raise ValueError('"mean" and "std" must have the same length.')
@@ -250,32 +267,106 @@ def validate_prep(prep: dict[str, Any], required_keys: list[str]) -> dict[str, A
 
     return prep
 
-def validate_aug(aug: dict[str, Any], required_keys: list[str]) -> dict[str, Any]:
+def validate_aug(aug: dict[str, Any], allowed_keys: list[str]) -> dict[str, Any]:
     """
-    Checks for the missing content of the augmentation configuration. 
-    Casts into objects.
+    Checks for invalid content of the augmentation configuration. 
 
     Args:
         aug (dict[str, Any]): Dictionary containing the augmentation configuration variables.
-        required_keys [list[str]]: List of keys that are required in the configuration file.
+        required_keys [list[str]]: List of keys that may be used in the configuration file.
 
     Returns:
         dict[str, Any]: Dictionary containing the augmentation configuration variables.
             String are casted into objects.
 
     Raises:
-        ValueError: If any of the obligatory augmentation configuration variables are missing.
+        ValueError: If argument is not allowed.
+                    If argument is invalid.
     """
 
-    missing_keys = [key for key in required_keys if key not in aug]
-
-    if missing_keys:
-        raise ValueError(f'Missing obligatory augmentation variables: {missing_keys}')
-
     if not aug:
-        return aug
+        return None
+    
+    invalid_keys = [key for key in aug if key not in allowed_keys]
 
-    # TO DO: AUGMENTATIONS
+    if invalid_keys:
+        raise ValueError(f'Invalid keys in augmentation: {invalid_keys}. Available: {allowed_keys}.')
+
+    if 'hsv' in aug and aug['hsv'] is not None:
+        hsv = aug['hsv']
+
+        if not isinstance(hsv, dict):
+            raise ValueError("aug['hsv'] must be a dictionary.")
+        
+        for k in ['hue', 'saturation', 'brightness']:
+            if k in hsv:
+                val = hsv[k]
+
+                if not isinstance(val, (list, tuple)) or len(val) != 2:
+                    raise ValueError(f"hsv '{k}' must be a list or tuple of 2 values (min, max).")
+
+                if val[0] > val[1]:
+                    raise ValueError(f"hsv '{k}' min value ({val[0]}) cannot be greater than max value ({val[1]}).")
+                
+                if k in ['saturation', 'brightness'] and val[0] < 0:
+                    raise ValueError(f"hsv '{k}' values cannot be negative.")
+
+    for key in ['rotation', 'translation', 'scale']:
+        if key in aug and aug[key] is not None:
+            val = aug[key]
+
+            if not isinstance(val, (list, tuple)) or len(val) != 2:
+                raise ValueError(f"aug['{key}'] must be a list or tuple of 2 values (min, max).")
+
+            if val[0] > val[1]:
+                raise ValueError(f"aug['{key}'] min value ({val[0]}) cannot be greater than max value ({val[1]}).")
+            
+            if key in ['scale', 'translation'] and val[0] < 0:
+                raise ValueError(f"aug['{key}'] values cannot be negative.")
+
+    if 'interpolation_type' in aug and aug['interpolation_type'] is not None:
+        valid_interpolation = ['bilinear', 'bicubic', 'nearest']
+
+        if aug['interpolation_type'] not in valid_interpolation:
+            raise ValueError(f"aug['interpolation_type'] must be one of {valid_interpolation}.")
+
+    for key in ['horizontal_flip', 'vertical_flip']:
+        if key in aug and aug[key] is not None:
+            if not isinstance(aug[key], bool):
+                raise ValueError(f"aug['{key}'] must be a boolean.")
+
+    if 'fill' in aug and aug['fill'] is not None:
+        fill = aug['fill']
+
+        if not isinstance(fill, int) and fill not in ['zeros', 'border', 'reflection']:
+            raise ValueError("aug['fill'] must be an integer (CPU) or one of ['zeros', 'border', 'reflection'] (GPU).")
+
+    if 'random_crop' in aug and aug['random_crop'] is not None:
+        rc = aug['random_crop']
+
+        if isinstance(rc, int):
+            if rc <= 0:
+                raise ValueError(f"aug['random_crop'] must be greater than 0, got {rc}.")
+        elif isinstance(rc, (list, tuple)) and len(rc) == 2:
+            if rc[0] <= 0 or rc[1] <= 0:
+                raise ValueError(f"aug['random_crop'] dimensions must be greater than 0, got {rc}.")
+        else:
+            raise ValueError("aug['random_crop'] must be an integer or a list/tuple of 2 integers.")
+
+    if 'probs' in aug and aug['probs'] is not None:
+        probs = aug['probs']
+
+        if not isinstance(probs, dict):
+            raise ValueError("aug['probs'] must be a dictionary.")
+        
+        valid_prob_keys = ['hsv', 'affine', 'horizontal_flip', 'vertical_flip', 'random_crop']
+
+        for k, v in probs.items():
+            if k not in valid_prob_keys:
+                raise ValueError(f"Unknown probability key '{k}'. Expected one of {valid_prob_keys}.")
+            
+            if not isinstance(v, (float, int)) or not (0.0 <= v <= 1.0):
+                raise ValueError(f"Probability for '{k}' must be a float between 0.0 and 1.0, got {v}.")
 
     return aug
 
@@ -309,14 +400,13 @@ def build_model(setup: dict[str, Any], classification: bool) -> ClassificationMo
 
     return model_class(**model_kwargs)
 
-def build_datasets(setup: dict[str, Any], prep: dict[str, Any], aug: dict[str, Any], seed: int, classification: bool) -> tuple[DatasetBase, DatasetBase]:
+def build_datasets(setup: dict[str, Any], prep: dict[str, Any], seed: int, classification: bool) -> tuple[DatasetBase, DatasetBase]:
     """
     Splits data and converts into training and evaluation datasets.
 
     Args:
         setup (dict[str, Any]): Dictionary containing configuration of the setup.
         prep (dict[str, Any]): Dictionary containing configuration of the preprocessing.
-        aug (dict[str, Any]): Dictionary containing configuration of the augmentations.
         seed (int): Seed.
         classification (bool): Selection of classification or segmentation datasets.
 
@@ -331,8 +421,8 @@ def build_datasets(setup: dict[str, Any], prep: dict[str, Any], aug: dict[str, A
     rgb = setup['in_channels'] == 3
 
     dataset = DatasetClassification if classification else DatasetSegmentation
-    train_dataset = dataset(dataset_name = setup['data_dir'], data = folds.folds[used_fold]['train'], prep = prep, aug = aug, train = True, rgb = rgb)
-    val_dataset = dataset(dataset_name = setup['data_dir'], data = folds.folds[used_fold]['val'], prep = prep, train = False, rgb = rgb)
+    train_dataset = dataset(dataset_name = setup['data_dir'], prep = prep, data = folds.folds[used_fold]['train'], rgb = rgb)
+    val_dataset = dataset(dataset_name = setup['data_dir'], prep = prep, data = folds.folds[used_fold]['val'], rgb = rgb)
     return train_dataset, val_dataset
 
 def build_loss_function(setup: dict[str, Any]) -> torch.nn:
