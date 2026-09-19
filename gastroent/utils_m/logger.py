@@ -3,6 +3,8 @@ import re
 import matplotlib.pyplot as plt
 import pandas as pd
 from typing import Any
+import json
+import shutil
 
 class Logger:
     """
@@ -48,6 +50,17 @@ class Logger:
 
         self.checkpoint_dir = self.run_dir / 'checkpoints'
         self.checkpoint_dir.mkdir(parents = True, exist_ok = True)
+
+    def save_config(self, config_path: Path) -> None:
+        """
+        Saves the complete launch configuration JSON into the current run directory.
+        
+        Args:
+            config (Path): Path to original launch config file.
+        """
+
+        config_file = self.run_dir / 'launch_config.json'
+        shutil.copy(config_path, config_file)
 
     def mark_loaded(self) -> None:
         """

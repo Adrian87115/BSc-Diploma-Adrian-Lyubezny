@@ -11,13 +11,26 @@ def build_experiment(seed, experiment_name, run_index = None, epoch_load = None,
     world_size = int(os.environ.get('WORLD_SIZE', 1))
     rank = int(os.environ.get('LOCAL_RANK', 0))
 
-    config_path = Path(__file__).resolve().parents[2] / 'models' / experiment_name / 'launch_config.json'
+    if run_index is not None:
+        config_path = Path(__file__).resolve().parents[2] / 'models' / experiment_name / f'run_{run_index:03d}' / 'launch_config.json'
+
+        if not config_path.exists():
+            raise FileNotFoundError(f'Config file for resumption not found: {config_path}.')
+    else:
+        config_path = Path(__file__).resolve().parents[2] / 'models' / experiment_name / 'launch_config.json'
+
+        if not config_path.exists():
+            raise FileNotFoundError(f'Base config file not found: {config_path}.')
+
     setup, prep, aug = get_config(config_path, classification = classification)
 
-    log = Logger(experiment_name = experiment_name, setup = setup, prep = prep, aug = aug, run_index = run_index)
+    logger = Logger(experiment_name = experiment_name, setup = setup, prep = prep, aug = aug, run_index = run_index)
+
+    if run_index is None and rank == 0:
+        logger.save_config(config_path)
 
     if plot_losses and run_index is not None:
-        log.plot_losses()
+        logger.plot_losses()
 
     model = build_model(setup = setup, classification = classification)
 
@@ -31,7 +44,7 @@ def build_experiment(seed, experiment_name, run_index = None, epoch_load = None,
 
     TrainerClass = TrainClassification if classification else TrainSegmentation
 
-    trainer = TrainerClass(logger = log, model = model, batch_size = setup['batch_size'],
+    trainer = TrainerClass(logger = logger, model = model, batch_size = setup['batch_size'],
                            loss_function = loss_function,
                            train_dataset = train_dataset, eval_dataset = val_dataset,
                            optimizer = optimizer, scheduler = scheduler,
