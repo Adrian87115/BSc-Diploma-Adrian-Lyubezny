@@ -10,6 +10,7 @@ from utils_m.logger import Logger
 from models_m.classification_models import ClassificationModel
 from models_m.segmentation_models import SegmentationModel
 from data_m.dataset_base import DatasetBase
+from gastroent.data_m.sampler import DistributedRepeatedSampler
 
 class TrainBase():
     """
@@ -33,6 +34,8 @@ class TrainBase():
         rank (int, optional): The index of the current process in the distributed training setup (0 is the main/master process).
             Defaults to 0.
         world_size (int, optional): The total number of processes/GPUs participating in the distributed training. Defaults to 1.
+        d_sampler_params (dict[str, Any] | None, optional): Parameters for DistributedWeightedSampler, used only for classification.
+            Defaults to None.
     """
 
     def __init__(self, logger: Logger, model: ClassificationModel | SegmentationModel, 
@@ -40,7 +43,8 @@ class TrainBase():
                  eval_dataset: DatasetBase, optimizer: torch.optim.Optimizer, 
                  scheduler: torch.optim.lr_scheduler, num_workers: int, 
                  persistent_workers: bool, prefetch_factor: int, pin_memory: bool, 
-                 seed: int = 42, backend_mode: str = 'gloo', rank: int = 0, world_size: int = 1):
+                 seed: int = 42, backend_mode: str = 'gloo', rank: int = 0, world_size: int = 1,
+                 d_sampler_params: dict[str, Any] | None = None):
         self.rank = rank
         self.world_size = world_size
 
@@ -57,6 +61,15 @@ class TrainBase():
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.seed = seed
+
+        from train_m.train_classification import TrainClassification
+        from train_m.train_segmentation import TrainSegmentation
+        if isinstance(self, TrainClassification):
+            self.train_classification = True
+        elif isinstance(self, TrainSegmentation):
+            self.train_classification = False
+        else:
+            raise TypeError(f'Invalid training class. Expected: TrainClassification or TrainSegmentation.')
 
         self.num_classes = getattr(model, 'num_classes', 2)
 
@@ -77,8 +90,14 @@ class TrainBase():
         set_seeds(self.seed + self.rank)
 
         if self.world_size > 1: 
-            self.train_sampler = DistributedSampler(train_dataset, num_replicas = self.world_size, rank = self.rank, shuffle = True) 
-            self.val_sampler = DistributedSampler(eval_dataset, num_replicas = self.world_size, rank = self.rank, shuffle = False) 
+            if self.train_classification:
+                self.train_sampler = DistributedRepeatedSampler(train_dataset, max_repeats = d_sampler_params['max_repeats'],
+                                                                num_replicas = self.world_size, rank = self.rank, shuffle = True, 
+                                                                seed = self.seed, drop_last = d_sampler_params['drop_last'])
+            else:
+                self.train_sampler = DistributedSampler(train_dataset, num_replicas = self.world_size, rank = self.rank, shuffle = True, seed = self.seed) 
+                
+            self.val_sampler = DistributedSampler(eval_dataset, num_replicas = self.world_size, rank = self.rank, shuffle = False, seed = self.seed) 
         else: 
             self.train_sampler = None 
             self.val_sampler = None 
@@ -190,10 +209,7 @@ class TrainBase():
             RuntimeError: If training was resumed in the selected run, but model was not loaded.
         """
 
-        from train_m.train_classification import TrainClassification
-        classification = isinstance(self, TrainClassification)
-        
-        transforms = get_transforms(prep = prep, aug = aug, use_gpu = gpu_transforms, classification = classification)
+        transforms = get_transforms(prep = prep, aug = aug, use_gpu = gpu_transforms, classification = self.train_classification)
 
         if self.logger.is_resuming and not self.logger.is_loaded:
             raise RuntimeError(f'trainer.load_model() must be called before trainer.train() while resuming.')
@@ -221,7 +237,7 @@ class TrainBase():
                     inputs = inputs.to(self.device, non_blocking = True)
                     labels = labels.to(self.device, non_blocking = True)
 
-                    if classification:
+                    if self.train_classification:
                         inputs = transforms(inputs)
                     else:
                         inputs, labels = transforms(inputs, labels)
@@ -232,7 +248,7 @@ class TrainBase():
                     inputs_np = inputs.numpy()
                     transformed_inputs = []
 
-                    if classification:
+                    if self.train_classification:
                         for image in inputs_np:
                             image = image.transpose(1, 2, 0)
                             transformed = transforms(image = image,)
@@ -252,9 +268,9 @@ class TrainBase():
                             transformed_labels.append(transformed['mask'])
 
                     inputs = torch.stack(transformed_inputs).to(self.device, non_blocking = True)
-                    labels = torch.stack(transformed_labels).to(self.device, non_blocking = True) if not classification else labels.to(self.device, non_blocking = True)
+                    labels = torch.stack(transformed_labels).to(self.device, non_blocking = True) if not self.train_classification else labels.to(self.device, non_blocking = True)
 
-                    if not classification and labels.ndim == 4 and labels.shape[1] == 1:
+                    if not self.train_classification and labels.ndim == 4 and labels.shape[1] == 1:
                         labels = labels.squeeze(1)
 
                 self.optimizer.zero_grad(set_to_none = True)

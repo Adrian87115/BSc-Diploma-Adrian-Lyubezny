@@ -24,7 +24,8 @@ REQUIRED_SETUP_CLASSIFICATION = ['in_channels', 'num_classes', 'm_type',
                                  'prefetch_factor', 'pin_memory', 'model',
                                  'data_dir', 'n_folds', 'used_fold',
                                  'loss_function', 'optimizer', 'scheduler', 'batch_size',
-                                 'num_epochs', 'save_freq', 'eval_freq']
+                                 'num_epochs', 'save_freq', 'eval_freq', 'backend_mode',
+                                 'd_sampler_params']
 
 # Required keys for building and running segmentation tasks
 REQUIRED_SETUP_SEGMENTATION = ['in_channels', 'encoder', 'pretrained',
@@ -32,7 +33,7 @@ REQUIRED_SETUP_SEGMENTATION = ['in_channels', 'encoder', 'pretrained',
                                'prefetch_factor', 'pin_memory', 'model',
                                'data_dir', 'n_folds', 'used_fold',
                                'loss_function', 'optimizer', 'scheduler', 'batch_size',
-                               'num_epochs', 'save_freq', 'eval_freq']
+                               'num_epochs', 'save_freq', 'eval_freq', 'backend_mode']
 
 # Required keys for preprocessing
 REQUIRED_PREP = ['resize_size', 'interpolation_type', 'center_crop', 'mean', 'std']
@@ -220,7 +221,10 @@ def validate_setup(setup: dict[str, Any], required_keys: list[str]) -> dict[str,
     if setup['model'] is ResNetModel:
         if 'weights_ver' in setup:
             if not isinstance(setup['weights_ver'], int):
-                raise ValueError('"weights_ver" must be an integer.')
+                raise ValueError("'weights_ver' must be an integer.")
+
+    if setup['backend_mode'] not in ['gloo', 'nccl']:
+         raise ValueError(f"Invalid backen mode: {setup['backend_mode']}. Expected: 'gloo', 'nccl'.")
 
     return setup
 
@@ -251,19 +255,19 @@ def validate_prep(prep: dict[str, Any], required_keys: list[str]) -> dict[str, A
         raise ValueError(f'Unknown interpolation type: {interpolation}.')         
 
     if len(prep['mean']) != len(prep['std']):
-        raise ValueError('"mean" and "std" must have the same length.')
+        raise ValueError("'mean' and 'std' must have the same length.")
 
     if any(std <= 0 for std in prep['std']):
         raise ValueError('All values in "std" must be greater than zero.')
 
     if prep['resize_size'] <= 0:
-        raise ValueError('"resize_size" must be positive.')
+        raise ValueError("'resize_size' must be positive.")
 
     if prep['center_crop'] <= 0:
-        raise ValueError('"center_crop" must be positive.')
+        raise ValueError("'center_crop' must be positive.")
 
     if prep['center_crop'] > prep['resize_size']:
-        raise ValueError('"center_crop" cannot be larger than "resize_size".')
+        raise ValueError("'center_crop' cannot be larger than 'resize_size'.")
 
     return prep
 
