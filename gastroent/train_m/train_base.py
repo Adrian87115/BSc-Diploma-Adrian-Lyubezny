@@ -79,6 +79,8 @@ class TrainBase():
             self.ddp = self.model
 
         self.resumed_epoch = 0
+        self.best_epoch = 0 # Epoch of the smallest achieved eval loss
+        self.best_eval_loss = float('inf')  # The smallest achieved eval loss
 
         self.experiment_dir = self.logger.experiment_dir
         self.run_dir = self.logger.run_dir
@@ -117,35 +119,44 @@ class TrainBase():
         if self.world_size > 1: 
             cleanup()
 
-    def save_model(self, epoch: int) -> None:
+    def save_model(self, epoch: int | str) -> None:
         """
         Saves the model state.
 
         Args:
-            epoch (int): Epoch number used to name the file, and
-                to resume the training from this point.
+            epoch (int | str): Epoch number used to name the file, or a string 
+                (e.g., 'best_model') for special checkpoints.
         """
 
+        if self.rank != 0:
+            return
+    
         model_name = self.model.__class__.__name__
         checkpoint = {'run_index': self.run_index,
                       'model_name': model_name,
                       'epoch': epoch,
+                      'best_epoch': self.best_epoch,
+                      'best_eval_loss': self.best_eval_loss,
                       'datasets': self.used_datasets,
                       'model_state_dict': self.model.state_dict(),
                       'optimizer_state_dict': self.optimizer.state_dict(),
                       'scheduler_state_dict': (self.scheduler.state_dict() if self.scheduler is not None else None)}
 
-        file_path = self.logger.get_checkpoint_path(epoch)
+        if isinstance(epoch, str):
+            file_path = self.checkpoint_dir / f'{epoch}.pt'
+        else:
+            file_path = self.logger.get_checkpoint_path(epoch)
+
         torch.save(checkpoint, file_path)
 
         print(f'Model successfully saved to {file_path}.')
 
-    def load_model(self, epoch: int) -> None:
+    def load_model(self, epoch: int | str) -> None:
         """
         Load the model state.
 
         Args:
-            epoch (int): Number of epoch, used to load the state.
+            epoch (int | str): Number of epoch, or string used to load the state.
 
         Raises:
             ValueError: If checkpoint was not found.
@@ -153,7 +164,10 @@ class TrainBase():
                         If run indices do not match.
         """
 
-        file_path = self.logger.get_checkpoint_path(epoch)
+        if isinstance(epoch, str):
+            file_path = self.checkpoint_dir / f'{epoch}.pt'
+        else:
+            file_path = self.logger.get_checkpoint_path(epoch)
 
         if not file_path.exists():
             raise ValueError(f'Checkpoint for epoch {epoch} was not found: {file_path}.')
@@ -172,6 +186,8 @@ class TrainBase():
             raise ValueError(f'Run mismatch. Logger: {self.run_index}, checkpoint: {saved_run_index}.')
 
         self.resumed_epoch = checkpoint['epoch']
+        self.best_epoch = checkpoint['best_epoch']
+        self.best_eval_loss = checkpoint['best_eval_loss']
         
         saved_datasets = checkpoint.get('datasets', [])
 
@@ -309,6 +325,13 @@ class TrainBase():
 
                 if self.rank == 0:
                     self.logger.update_log(eval_stat)
+
+            if eval_loss is not None and eval_loss < self.best_eval_loss:
+                self.best_eval_loss = eval_loss
+                self.best_epoch = epoch
+
+                if self.rank == 0:    
+                    self.save_model('best_model')
 
             if epoch % save_freq == 0 and self.rank == 0:
                 self.save_model(epoch)
