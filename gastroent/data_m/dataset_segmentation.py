@@ -29,10 +29,7 @@ class DatasetSegmentation(DatasetBase):
         mask = self.to_image(mask)
 
         image = self.resize(image)
-        image = self.crop(image)
-
         mask = self.mask_resize(mask)
-        mask = self.crop(mask)
 
         image = image.float() / 255.0
         mask = (mask > 0).float().long()    # black -> 0, white -> 1

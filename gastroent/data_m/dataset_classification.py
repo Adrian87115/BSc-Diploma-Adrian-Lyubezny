@@ -44,7 +44,6 @@ class DatasetClassification(DatasetBase):
         image = Image.open(sample['image']).convert('RGB' if self.rgb else 'L')
         image = self.to_image(image)
         image = self.resize(image)
-        image = self.crop(image)
         image = image.float() / 255.0
         label = torch.tensor(CLASS_TO_IDX[sample['label']], dtype = torch.long)
         return image, label

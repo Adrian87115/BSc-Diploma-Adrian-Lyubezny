@@ -23,7 +23,6 @@ class DatasetBase(Dataset):
         self.to_image = v2.ToImage()
         self.resize = v2.Resize(size = prep['resize_size'], interpolation = interpolation_map[prep['interpolation_type']])
         self.mask_resize = v2.Resize(size = prep['resize_size'], interpolation = v2.InterpolationMode.NEAREST)
-        self.crop = v2.CenterCrop(size = prep['center_crop'])
 
     def __len__(self) -> int:
         """

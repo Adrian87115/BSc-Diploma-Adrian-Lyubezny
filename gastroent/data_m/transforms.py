@@ -48,6 +48,9 @@ def get_transforms(prep: dict[str, Any], aug: dict[str, Any] | None = None, use_
     Returns:
         (K.AugmentationSequential | A.Compose): Preprocessing pipeline.
 
+    Raises:
+        ValueError: If 'center_crop' in `prep` is not provided.
+
     Images entering this pipeline should be float32 tensors in [0, 1].
     """
 
@@ -55,6 +58,11 @@ def get_transforms(prep: dict[str, Any], aug: dict[str, Any] | None = None, use_
                          'bicubic': cv2.INTER_CUBIC,
                          'nearest': cv2.INTER_NEAREST}
     ops = []
+
+    center_crop = prep.get('center_crop', None)
+
+    if center_crop is None:
+        raise ValueError('Expected center_crop in the prep dictionary.')
 
     if aug:
         probs = aug.get('probs', {})
@@ -77,11 +85,22 @@ def get_transforms(prep: dict[str, Any], aug: dict[str, Any] | None = None, use_
                                          p = probs.get('hsv', 0.5)))
 
             fill_val = aug.get('fill', 0)
+
+            if fill_val == 'reflection':
+                mode = cv2.BORDER_REFLECT
+                fill = 0
+            elif fill_val == 'border':
+                mode = cv2.BORDER_REPLICATE
+                fill = 0
+            else:
+                mode = cv2.BORDER_CONSTANT
+                fill = fill_val
+
             ops.append(A.Affine(rotate = aug.get('rotation', 0),
                                 translate_px = aug.get('translation'),
                                 scale = aug.get('scale'),
-                                fill = fill_val if isinstance(fill_val, int) else 0,    # constant value used to fill new gaps
-                                mode = cv2.BORDER_REFLECT if fill_val == 'reflection' else cv2.BORDER_CONSTANT,
+                                fill = fill,
+                                mode = mode,
                                 interpolation = interpolation_map[affine_interpolation],
                                 p = probs.get('affine', 0.5)))
             
@@ -95,7 +114,9 @@ def get_transforms(prep: dict[str, Any], aug: dict[str, Any] | None = None, use_
                 random_crop = to_hw(random_crop)
                 ops.append(A.RandomCrop(height = random_crop[0], width = random_crop[1], p = probs.get('random_crop', 0.5))) 
 
-        ops.extend([A.Normalize(mean = prep['mean'], std = prep['std'], max_pixel_value = 1.0),
+        center_crop = to_hw(center_crop)
+        ops.extend([A.CenterCrop(height = center_crop[0], width = center_crop[1], p = 1.0),
+                    A.Normalize(mean = prep['mean'], std = prep['std'], max_pixel_value = 1.0),
                     ToTensorV2()])
         return A.Compose(ops, additional_targets = {'mask': 'mask'} if not classification else None)
 
@@ -107,12 +128,12 @@ def get_transforms(prep: dict[str, Any], aug: dict[str, Any] | None = None, use_
                                      brightness = hsv.get('brightness', 0),
                                      p = probs.get('hsv', 0.5)))
             
-            ops.append(K.RandomAffine(degrees =  aug.get('rotation', 0),
-                                      translate =  aug.get('translation'),
-                                      scale = aug.get('scale'),
-                                      padding_mode =  aug.get('fill', 'zeros'), # zeros, border, reflection
-                                      resample =  affine_interpolation,
-                                      p = probs.get('affine', 0.5)))
+        ops.append(K.RandomAffine(degrees =  aug.get('rotation', 0),
+                                  translate =  aug.get('translation'),
+                                  scale = aug.get('scale'),
+                                  padding_mode =  aug.get('fill', 'zeros'), # zeros, border, reflection
+                                  resample =  affine_interpolation,
+                                  p = probs.get('affine', 0.5)))
       
         if h_flip:
             ops.append(K.RandomHorizontalFlip(p = probs.get('horizontal_flip', 0.5)))
@@ -123,5 +144,6 @@ def get_transforms(prep: dict[str, Any], aug: dict[str, Any] | None = None, use_
         if random_crop:
             ops.append(K.RandomCrop(size = random_crop, p = probs.get('random_crop', 0.5))) 
 
-    ops.append(K.Normalize(mean = prep['mean'], std = prep['std']))
+    ops.extend([K.CenterCrop(center_crop),
+                K.Normalize(mean = prep['mean'], std = prep['std'])])
     return K.AugmentationSequential(*ops, data_keys = ['input'] if classification else ['input', 'mask'])
